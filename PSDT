@@ -1,0 +1,86 @@
+# Import libraries
+import requests
+import urllib.request
+import io
+from bs4 import BeautifulSoup
+import string
+import re
+
+url = 'https://www.trustpilot.com/review/emag.ro?languages=all'
+response = requests.get(url)
+soup = BeautifulSoup(response.text, "html.parser")
+
+allReviews = []
+allReviewTitles = []
+
+negativeWords = []
+negativeWordsUrl = 'https://raw.githubusercontent.com/jeffreybreen/twitter-sentiment-analysis-tutorial-201107/08a269765a6b185d5f3dd522c876043ba9628715/data/opinion-lexicon-English/negative-words.txt'
+negativeWordsResponse = requests.get(negativeWordsUrl)
+negativeWords = negativeWordsResponse.text
+
+positiveWords = []
+positiveWordsUrl = 'https://raw.githubusercontent.com/jeffreybreen/twitter-sentiment-analysis-tutorial-201107/master/data/opinion-lexicon-English/positive-words.txt'
+positiveWordsResponse = requests.get(positiveWordsUrl)
+positiveWords = positiveWordsResponse.text
+
+
+numberOfReviews = soup.find("span", {"class": "headline__review-count"})
+numberOfReviews = numberOfReviews.text.replace(',','')
+
+for regularPage in range(1, int(int(numberOfReviews)/20) + 1):
+    url = 'https://www.trustpilot.com/review/emag.ro?languages=all&page=' + str(regularPage)
+    response = requests.get(url)
+    soup = BeautifulSoup(response.text, "html.parser")
+    for i in range(0, 20):
+        wrapperOfReview = soup.find("div", {"class": "review-content__body"})
+
+        review = soup.find_all("p", {"class": "review-content__text"})
+        allReviews.append(review[i].text.strip())
+
+        reviewTitle = soup.find_all("a", {"class": "link link--large link--dark"})
+        allReviewTitles.append(reviewTitle[i].text.strip())
+
+    penultimaPagina = regularPage
+
+
+lastPageUrl = 'https://www.trustpilot.com/review/emag.ro?languages=all&page=' + str(penultimaPagina + 1)
+response = requests.get(lastPageUrl)
+for i in range(0, int(int(numberOfReviews) % 20)):
+    wrapperOfReview = soup.find("div", {"class": "review-content__body"})
+
+    review = soup.find_all("p", {"class": "review-content__text"})
+    allReviews.append(review[i].text.strip())
+
+    reviewTitle = soup.find_all("a", {"class": "link link--large link--dark"})
+    allReviewTitles.append(reviewTitle[i].text.strip())
+
+websitePositivityIndex = 0
+
+for i in range(0, int(numberOfReviews)):
+    splittedReview = allReviews[i].split()
+
+    numberOfPositiveWords = 0
+    numberOfNegativeWords = 0
+    positivityIndex = 0
+
+    for word in splittedReview:
+        word = re.sub(r'[^\w\s]','',word)
+        if (positiveWords.count(word)):
+            numberOfPositiveWords += 1
+            positivityIndex += 1
+        elif (negativeWords.count(word)):
+            numberOfNegativeWords += 1
+            positivityIndex -= 1
+    
+    # print('Review-ul cu titlul: ', allReviewTitles[i], ' contine ', numberOfPositiveWords, ' cuvinte pozitive si ', numberOfNegativeWords, ' cuvinte negative si are indicele de positivitate:', positivityIndex)
+    
+    if (positivityIndex > 30):
+        websitePositivityIndex += 1
+    else:
+        websitePositivityIndex -= 1
+
+if (websitePositivityIndex):
+    print('Site-ul prezinta un review general pozitiv!')
+
+if (int(numberOfReviews) < 20):
+    print('Rezultatul calculat poate sa nu reflecte realitatea dat fiind numarul mic de review-uri!')
